@@ -149,17 +149,51 @@ testing = bw.new[-train.indices,]
 
 Question 5: Which regularization algorithm seems most appropriate for this research question? Justify your choice. 
 
-I would use an elastic net regularization algorithm. Elastic net is highly interpretable, which is necessary when conducting feature selection, as we want to be able to distinguish and understand the features that have been selected; we want to be able to communicate that the selected features are probable risk factors. Additionally, elastic net is more flexible than LASSO, and we want to run a flexible algorithm to be able to select appropriate features.
+I would use a LASSO algorithm. LASSO is highly interpretable, which is necessary when conducting feature selection, as we want to be able to distinguish and understand the features that have been selected; we want to be able to communicate that the selected features are probable risk factors. 
 
 Question 6: Which metrics will you use to evaluate your model? Consider your research question and the outcome of interest. 
 
-
+I will use accuracy as an evaluation metric to evaluate the model.
 
 Assess how the metric(s) change(s) based on values of the hyperparameters. Construct a grid to explore various values (do not just use the default parameters). Once you have a final model, determine the features that are considered "important" based on the model output.
  
 ```{r}
+set.seed(100)
 
+#Create grid to search lambda
+lambda = 10^seq(-3,3, length = 100)
+
+lasso.bw = train(
+  obesity ~., 
+  data = training, 
+  method = "glmnet", 
+  trControl = trainControl("cv", number = 10), 
+  tuneGrid = expand.grid(alpha = 0, lambda = lambda)
+)
+
+#Print the values of alpha and lambda that gave best prediction
+lasso.bw$bestTune
+
+#Print all of the options examined
+lasso.bw$results
+
+# Model coefficients
+coef(lasso.bw$finalModel, lasso.bw$bestTune$lambda)
+varImp(lasso.bw)
+
+# Make predictions
+pred.bw <- lasso.bw %>% predict(x.train)
+
+pred.bw = predict(lasso.bw, training)
+pred.bw.prob = predict(lasso.bw, training, type = "prob")
+
+# Model prediction performance
+eval.results = confusionMatrix(pred.bw, training$obesity, positive = "1")
+print(eval.results)
+
+#Accuracy of this model is 0.81
 ```
+
 ### Step 4: Test your final model in the testing dataset
 
 Use the implementation of your model in the testing set to obtain final performance metrics and perform the inference needed to address your research question. 
@@ -167,18 +201,78 @@ Use the implementation of your model in the testing set to obtain final performa
 Question 7: Summarize your final conclusion in 2-3 sentences
 
 ```{r}
+set.seed(100)
 
+# Using best fit model from above with testing data
+pred.lasso.f = predict(lasso.bw, testing)
+pred.lasso.f.prob = predict(lasso.bw, testing, type = "prob")
+
+# Evaluating in testing data with confusion matrix
+eval.results = confusionMatrix(pred.lasso.f, testing$obesity, positive = "1")
+print(eval.results)
 ```
+
+The final accuracy of this model is **80.37**. The variable that seems to be of the most importance is parental-reported race/ethnicity of the child being "other". This is closely followed by cobalt concentration in the mothers' blood during pregnancy, and race of the child being American Indian. Many of the variables that are predictors of childhood obesity are categories of race/ethinicity, as is income.
 
 ### Step 5: Construct another model, making a different choice of variable inclusion. 
 
 Redo the above, but now make the opposite choice about variable inclusion. That is, if you did not include the features that themselves might not be modifiable contributors to childhod overweight/obesity, but you would typically include in an explanatory model, include them now. Conversely, if you include those variables previously, exclude them now
 
-Question 7: Do the "important" features change when you make a differnt choice about the other features? Do the hyperparameters that optimize the model change when the additional variables are included? What about model performance?
+Question 7: Do the "important" features change when you make a different choice about the other features? Do the hyperparameters that optimize the model change when the additional variables are included? What about model performance?
 
 ```{r}
+set.seed(100)
 
+train.indices = createDataPartition(y = bw.data$obesity,p = 0.7,list = FALSE)
+
+training.2 = bw.data[train.indices,]
+testing.2 = bw.data[-train.indices,]
+
+#Create grid to search lambda
+lambda = 10^seq(-3,3, length = 100)
+
+lasso.2 = train(
+  obesity ~., 
+  data = training.2, 
+  method = "glmnet", 
+  trControl = trainControl("cv", number = 10), 
+  tuneGrid = expand.grid(alpha = 0, lambda = lambda)
+)
+
+#Print the values of alpha and lambda that gave best prediction
+lasso.2$bestTune
+
+#Print all of the options examined
+lasso.2$results
+
+# Model coefficients
+coef(lasso.2$finalModel, lasso.2$bestTune$lambda)
+varImp(lasso.2)
+
+# Make predictions
+pred.bw.2 = predict(lasso.2, training.2)
+pred.bw.prob.2 = predict(lasso.2, training.2, type = "prob")
+
+# Model prediction performance
+eval.results = confusionMatrix(pred.bw.2, training.2$obesity, positive = "1")
+print(eval.results)
+
+#Accuracy within training dataset => 0.90
+
+# Using best fit model from above with testing data
+pred.lasso.f.2 = predict(lasso.2, testing.2)
+pred.lasso.f.prob.2 = predict(lasso.2, testing.2, type = "prob")
+
+# Evaluating in testing data with confusion matrix
+eval.results = confusionMatrix(pred.lasso.f.2, testing.2$obesity, positive = "1")
+print(eval.results)
+
+#Accuracy within testing dataset => 0.87
 ```
+
+The important features change with inclusion of the other variables, 
+
+When the additional variables are included, lambda does change from 0.02 to 0.014. 
 
 ## Exercise 2: Creating more refined phenotypes for an explanatory analysis.
 
