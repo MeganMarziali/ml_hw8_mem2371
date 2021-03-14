@@ -270,9 +270,7 @@ print(eval.results)
 #Accuracy within testing dataset => 0.87
 ```
 
-The important features change with inclusion of the other variables, 
-
-When the additional variables are included, lambda does change from 0.02 to 0.014. 
+The important features change with inclusion of the other variables; the concentration of cobalt becomes the most important variable. When the additional variables are included, lambda does change from 0.02 to 0.014. The model performance, as evaluated through assessing accuracy, is better in this model than in the model with the excluded variables.
 
 ## Exercise 2: Creating more refined phenotypes for an explanatory analysis.
 
