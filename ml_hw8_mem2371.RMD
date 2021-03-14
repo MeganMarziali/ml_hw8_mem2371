@@ -303,12 +303,46 @@ mortality: 1=Died in ICU, 0=Survived
 
 Question 1: Name one potential risk/concern of obtaining data that has already been centered and scaled.
 
+One potential concern with obtaining clean data is that we would be trusting whoever cleaned it that they had done this properly. I would want to see the code that they used to center and scale the data, to ensure that this needed to be done and that it was done appropriately.
+
 Question 2: What unsupervised analysis do you think is appropriate for this research question? Justify your answer.
 
 Implement the unsupervised analysis you chose in Question 2, implementing appropriate analyses to determine the number of phenotypic clusters to keep within the analysis.
 
 ```{r}
+library(stats)
+library(factoextra)
+library(cluster)
 
+#Importing and recoding the data to be appropriate for the variable type
+
+covid.data = read_csv("./data/covid.csv") %>% 
+  janitor::clean_names()
+
+missmap(covid.data)
+```
+
+```{r}
+set.seed(100)
+
+# Create Dissimilarity matrix
+diss.matrix = dist(covid.data, method = "euclidean")
+
+# Hierarchical clustering using Complete Linkage
+clusters.c = hclust(diss.matrix, method = "complete" )
+
+# Plot the obtained dendrogram
+plot(clusters.c, cex = 0.6, hang = -1)
+
+#create function to use within clusGap
+hclusCut = function(x, k) list(cluster = cutree(hclust(dist(x, method = "euclidian"), method = "complete"), k = k))
+
+gap_stat = clusGap(covid.data, FUN = hclusCut, K.max = 10, B = 50)
+fviz_gap_stat(gap_stat)
+
+#Use number of clusters from gap statistic to obtain cluster assignment for each observation
+clusters.h.2 = cutree(clusters.h, k = 2)
+table(clusters.h.2)
 ```
 
 ### Step 2: Interpret the clusters
