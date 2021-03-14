@@ -66,10 +66,19 @@ ow_obesity: overweight or obesity during childhood
 ###Before Data Analysis
 Question 1: What additional information, if any, would you want from the principal study investigators in regards to the above features? 
 
+We would want to obtain domain knowledge from the principal study investigators. They may have come across abnormalities within the data, or ways in which the study was carried out, that they would flag to other investigators. For example, they may be aware of ways in which the questions were posed which could bias the way the respondents answered and would want to flag those questions to respondents. As smoking during pregnancy is highly stigmatized, we would want to obtain information regarding how the question was asked in order to be able to gauge whether misclassification is of concern. They additionally may be able to advise regarding appropriate categorization or recoding of variables, as they have done in prior studies or have seen done in the literature.
+
+In relation to other features in the dataset, we would need to know clinically relevant values, which the investigators could provide.
+
 Question 2: Look at the features in the dataset before you start your analysis. Are there any you want to exclude from your analysis completely? Why or why not? Are there any you want to recode or transform? Why or why not?
+
+To be able to answer whether we would want to recode some variables, we might want to begin data exploration and determine whether small cell sizes are of concern. We would likely want to recode the chemical concentration variables as greater than or equal to a concentration of clinical significance. 
+
+We could also consider removing variables that we hypothesize to be highly correlated. For example, including both birth weight and birth length may be redundant, as they are likely to be correlated. If I had access to appropriate resources, I would want to recode all the concentration variables to be greater than or below clinically significant levels, as this would be more interpretable. We would also want to exclude variables that have a lot of missing data.
 
 Question 3: Are any of the features not of interest as modifiable contributors to childhood overweight/obesity themselves, but in an explanatory model, you would typically include them? Will you include them in your analysis?
 
+I would propose that birth length and gestational period would both be variables that could induce confounding if birth weight is already in the model. While in an explanatory model, we would perhaps want to include these variables, I would remove them both because having birth weight in the model should be sufficient for predicting childhood obesity. The height of the child could also be removed from the model, because height of the child in of itself will likely not be predictive of obesity, but rather is taken into account as a way of measuring obesity. I would also argue that sex would be considered a confounder of childhood obesity among preterm infants and should thus not be included.
 
 ### Step 1: Load Packages and Prepare Data
 You will start by loading the needed packages. Some are already listed, but you can choose to use different ones. You will need to clean the data, check that values are plausible, ensure that all variables are the correct type for the algorithm and packages you want to use, etc.
@@ -80,29 +89,73 @@ library(caret)
 library(glmnet)
 library(Amelia)
 
+#Importing and recoding the data to be appropriate for the variable type
+bw.data = read_csv("./data/birthcohort_data.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    sex = as.factor(child_human_biological_sex),
+    income = as.factor(hh_income),
+    race = as.factor(race_ethnicity),
+    education = as.factor(mother_education),
+    smoking = as.factor(smoking_preg),
+    obesity = as.factor(ow_obesity)
+  ) %>% 
+  select(
+    -child_human_biological_sex,
+    -hh_income,
+    -race_ethnicity,
+    -mother_education,
+    -smoking_preg,
+    -ow_obesity
+    )
 
+#Checking for missing values
+missmap(bw.data)
 
+#Excluding variables previously hypothesized to not contribute to obesity
+bw.new = bw.data %>% 
+  select(
+    -child_height,
+    -birth_length,
+    -gestational_length,
+    -sex
+  )
 
+#Checking whether data is unbalanced
+summary(bw.new$obesity) %>% 
+  knitr::kable()
+
+#Outcome prevalence of 23.6%. Is this unbalanced?
 ```
 
 ### Step 2: Decide on a pipeline
 
 Question 4: In previous exercises, we often partition our sample into training and testing. We optimize hyperparameters using cross-validation. Is this pipeline still necessary if our goal is feature selection and not building a prediction model to apply to new data? What do you think? 
 
+Yes, we want to partition the data. We are using a data-driven pipeline, and by doing so, we need to be taking the right approaches to check how our algorithms are functioning. Optimizing hyperparameteres for feature selection, like varying the number of trees for example, can create notable changes in terms of variable importance. Partitioning the data in order to optimize these hyperparameters is needed, even if the research question is not related to prediction.
+
 Regardless of your answer above, partition the data into a 70/30 split just to get the practice with the programming code to partition.
 
 ```{r partition}
+set.seed(100)
 
+train.indices = createDataPartition(y = bw.new$obesity,p = 0.7,list = FALSE)
+
+training = bw.new[train.indices,]
+testing = bw.new[-train.indices,]
 ```
 
 ### Step 3: Construct a model using a regularization algorithm and the features of interest in the training data
 
 Question 5: Which regularization algorithm seems most appropriate for this research question? Justify your choice. 
 
+I would use an elastic net regularization algorithm. Elastic net is highly interpretable, which is necessary when conducting feature selection, as we want to be able to distinguish and understand the features that have been selected; we want to be able to communicate that the selected features are probable risk factors. Additionally, elastic net is more flexible than LASSO, and we want to run a flexible algorithm to be able to select appropriate features.
+
 Question 6: Which metrics will you use to evaluate your model? Consider your research question and the outcome of interest. 
 
-Assess how the metric(s) change(s) based on values of the hyperparameters. Construct a grid to explore various values (do not just use the default parameters). Once you have a final model, determine the features that are considered "important" based on the model output.
 
+
+Assess how the metric(s) change(s) based on values of the hyperparameters. Construct a grid to explore various values (do not just use the default parameters). Once you have a final model, determine the features that are considered "important" based on the model output.
  
 ```{r}
 
