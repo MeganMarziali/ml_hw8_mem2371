@@ -68,6 +68,8 @@ Question 1: What additional information, if any, would you want from the princip
 
 We would want to obtain domain knowledge from the principal study investigators. They may have come across abnormalities within the data, or ways in which the study was carried out, that they would flag to other investigators. For example, they may be aware of ways in which the questions were posed which could bias the way the respondents answered and would want to flag those questions to respondents. As smoking during pregnancy is highly stigmatized, we would want to obtain information regarding how the question was asked in order to be able to gauge whether misclassification is of concern. They additionally may be able to advise regarding appropriate categorization or recoding of variables, as they have done in prior studies or have seen done in the literature.
 
+Where/when the data was collected, context, identifying confounders/modifiers
+
 In relation to other features in the dataset, we would need to know clinically relevant values, which the investigators could provide.
 
 Question 2: Look at the features in the dataset before you start your analysis. Are there any you want to exclude from your analysis completely? Why or why not? Are there any you want to recode or transform? Why or why not?
@@ -78,7 +80,7 @@ We could also consider removing variables that we hypothesize to be highly corre
 
 Question 3: Are any of the features not of interest as modifiable contributors to childhood overweight/obesity themselves, but in an explanatory model, you would typically include them? Will you include them in your analysis?
 
-I would propose that birth length and gestational period would both be variables that could induce confounding if birth weight is already in the model. While in an explanatory model, we would perhaps want to include these variables, I would remove them both because having birth weight in the model should be sufficient for predicting childhood obesity. The height of the child could also be removed from the model, because height of the child in of itself will likely not be predictive of obesity, but rather is taken into account as a way of measuring obesity. I would also argue that sex would be considered a confounder of childhood obesity among preterm infants and should thus not be included.
+Of the features included, there are non-modifiable contributors listed. **Gestational length** could be non-modifiable, if we assume that the mother had given birth preterm resultant of a medical condition. **Child height** could be considered non-modifiable, as well as **mothers age at birth** and **sex** of the child. I would also argue that **race/ethnicity** of the child is non-modifiable. 
 
 ### Step 1: Load Packages and Prepare Data
 You will start by loading the needed packages. Some are already listed, but you can choose to use different ones. You will need to clean the data, check that values are plausible, ensure that all variables are the correct type for the algorithm and packages you want to use, etc.
@@ -88,6 +90,7 @@ library(tidyverse)
 library(caret)
 library(glmnet)
 library(Amelia)
+library(table1)
 
 #Importing and recoding the data to be appropriate for the variable type
 bw.data = read_csv("./data/birthcohort_data.csv") %>% 
@@ -112,27 +115,69 @@ bw.data = read_csv("./data/birthcohort_data.csv") %>%
 #Checking for missing values
 missmap(bw.data)
 
+#Checking reasonable values
+table1(~ .| obesity, data = bw.data)
+```
+
+From table 1, some of the values that the cellular concentrations take on are not plausible. It is not reasonable to have a negative concentration of a metal in the blood, the plausible values range from 0 upwards. We would want to consult with the study PIs to understand how these values were collected, and whether there was a measurement error or data input error. As preterm births are generally <37 weeks, it is not plausible that the gestational length exceeds 37 weeks; however, the maximum values observed from Table 1 exceed 37 weeks. To run this analysis properly, we should likely exclude births that are not preterm.
+
+This table also allows us to understand that there are small cell sizes. Income levels 159, 204 and 205 should be collapsed and will be recoded as such. Race level 212 and 855824 should be combined or excluded from analysis. Education level 215 should be collapsed with 203.
+
+```{r}
+bw.data = bw.data %>% 
+  mutate(
+    income = 
+      recode(income,
+           "159" = "<20000",
+           "204" = "<20000",
+           "205" = "<20000",
+           "206" = "20000-40000",
+           "207" = "40000-70000",
+           "208" = ">70000"),
+    race = 
+      recode(race,
+             "47" = "Hispanic",
+             "54" = "Other",
+             "855824" = "Other",
+             "210" = "Black",
+             "212" = "Other",
+             "214" = "White",
+             "217" = "Asian"),
+    education =
+      recode(education,
+             "4" = "Advanced grad",
+             "12" = "College",
+             "32" = "Some high school or less",
+             "203" = "Some college",
+             "215" = "Some high school or less")
+    )
+
+table1(~ .| obesity, data = bw.data)
+```
+
+The recoded data looks better in terms of small cell sizes.
+
+```{r}
 #Excluding variables previously hypothesized to not contribute to obesity
 bw.new = bw.data %>% 
   select(
     -child_height,
-    -birth_length,
     -gestational_length,
-    -sex
+    -sex,
+    -race,
+    -mother_age
   )
 
 #Checking whether data is unbalanced
 summary(bw.new$obesity) %>% 
   knitr::kable()
-
-#Outcome prevalence of 23.6%. Is this unbalanced?
 ```
 
 ### Step 2: Decide on a pipeline
 
 Question 4: In previous exercises, we often partition our sample into training and testing. We optimize hyperparameters using cross-validation. Is this pipeline still necessary if our goal is feature selection and not building a prediction model to apply to new data? What do you think? 
 
-Yes, we want to partition the data. We are using a data-driven pipeline, and by doing so, we need to be taking the right approaches to check how our algorithms are functioning. Optimizing hyperparameteres for feature selection, like varying the number of trees for example, can create notable changes in terms of variable importance. Partitioning the data in order to optimize these hyperparameters is needed, even if the research question is not related to prediction.
+Yes, we want to partition the data. We are using a data-driven pipeline, and by doing so, we need to be taking the right approaches to check how our algorithms are functioning. Optimizing hyperparameters for feature selection, like varying the number of trees for example, can create notable changes in terms of variable importance. Partitioning the data in order to optimize these hyperparameters is needed, even if the research question is not related to prediction.
 
 Regardless of your answer above, partition the data into a 70/30 split just to get the practice with the programming code to partition.
 
@@ -153,7 +198,7 @@ I would use a LASSO algorithm. LASSO is highly interpretable, which is necessary
 
 Question 6: Which metrics will you use to evaluate your model? Consider your research question and the outcome of interest. 
 
-I will use accuracy as an evaluation metric to evaluate the model.
+I will use accuracy as an evaluation metric to evaluate the model, using a confusion matrix as the outcome of interest is binary.
 
 Assess how the metric(s) change(s) based on values of the hyperparameters. Construct a grid to explore various values (do not just use the default parameters). Once you have a final model, determine the features that are considered "important" based on the model output.
  
@@ -167,7 +212,7 @@ lasso.bw = train(
   obesity ~., 
   data = training, 
   method = "glmnet", 
-  trControl = trainControl("cv", number = 10), 
+  trControl = trainControl("cv", number = 10, sampling = "down"), 
   tuneGrid = expand.grid(alpha = 0, lambda = lambda)
 )
 
@@ -191,7 +236,7 @@ pred.bw.prob = predict(lasso.bw, training, type = "prob")
 eval.results = confusionMatrix(pred.bw, training$obesity, positive = "1")
 print(eval.results)
 
-#Accuracy of this model is 0.81
+#Accuracy of this model is 0.89
 ```
 
 ### Step 4: Test your final model in the testing dataset
@@ -212,7 +257,9 @@ eval.results = confusionMatrix(pred.lasso.f, testing$obesity, positive = "1")
 print(eval.results)
 ```
 
-The final accuracy of this model is **80.37**. The variable that seems to be of the most importance is parental-reported race/ethnicity of the child being "other". This is closely followed by cobalt concentration in the mothers' blood during pregnancy, and race of the child being American Indian. Many of the variables that are predictors of childhood obesity are categories of race/ethinicity, as is income.
+The final accuracy of this model is **89.6**. 
+
+The variable that is of the most important is the concentration of cobalt, followed by infant growth score and concentration of vanadium. Income and education are both among the ten most important variables. This suggests that concentrations of some metals and sociodemographic factors are both important when considering risk factors for childhood obesity.
 
 ### Step 5: Construct another model, making a different choice of variable inclusion. 
 
@@ -235,7 +282,7 @@ lasso.2 = train(
   obesity ~., 
   data = training.2, 
   method = "glmnet", 
-  trControl = trainControl("cv", number = 10), 
+  trControl = trainControl("cv", number = 10, sampling = "down"), 
   tuneGrid = expand.grid(alpha = 0, lambda = lambda)
 )
 
@@ -257,7 +304,7 @@ pred.bw.prob.2 = predict(lasso.2, training.2, type = "prob")
 eval.results = confusionMatrix(pred.bw.2, training.2$obesity, positive = "1")
 print(eval.results)
 
-#Accuracy within training dataset => 0.90
+#Accuracy within training dataset => 0.87
 
 # Using best fit model from above with testing data
 pred.lasso.f.2 = predict(lasso.2, testing.2)
@@ -267,10 +314,10 @@ pred.lasso.f.prob.2 = predict(lasso.2, testing.2, type = "prob")
 eval.results = confusionMatrix(pred.lasso.f.2, testing.2$obesity, positive = "1")
 print(eval.results)
 
-#Accuracy within testing dataset => 0.87
+#Accuracy within testing dataset => 0.89
 ```
 
-The important features change with inclusion of the other variables; the concentration of cobalt becomes the most important variable. When the additional variables are included, lambda does change from 0.02 to 0.014. The model performance, as evaluated through assessing accuracy, is better in this model than in the model with the excluded variables.
+The important features change with inclusion of the other variables; the concentration of cobalt becomes the most important variable. When the additional variables are included, lambda does change from **0.016 to 0.019**. The model performance, as evaluated through assessing accuracy, is marginally better in the model with non-modifiable features excluded.
 
 ## Exercise 2: Creating more refined phenotypes for an explanatory analysis.
 
@@ -320,41 +367,50 @@ covid.data = read_csv("./data/covid.csv") %>%
   janitor::clean_names()
 
 missmap(covid.data)
+
+colMeans(covid.data, na.rm = TRUE)
+apply(covid.data, 2, sd, na.rm = TRUE)
 ```
 
 ```{r}
 set.seed(100)
 
-# Create Dissimilarity matrix
-diss.matrix = dist(covid.data, method = "euclidean")
+clusters.hcut = hcut(covid.data, k = 5, hc_func = "hclust", hc_method = "complete", hc_metric = "euclidian")
 
-# Hierarchical clustering using Complete Linkage
-clusters.c = hclust(diss.matrix, method = "complete" )
-
-# Plot the obtained dendrogram
-plot(clusters.c, cex = 0.6, hang = -1)
-
-#create function to use within clusGap
-hclusCut = function(x, k) list(cluster = cutree(hclust(dist(x, method = "euclidian"), method = "complete"), k = k))
-
-gap_stat = clusGap(covid.data, FUN = hclusCut, K.max = 10, B = 50)
+clusters.hcut$size
+fviz_dend(clusters.hcut, rect = TRUE)
+fviz_cluster(clusters.hcut)
+ 
+gap_stat = clusGap(covid.data, FUN = hcut, hc_method = "complete", K.max = 10, B = 50)
 fviz_gap_stat(gap_stat)
-
-#Use number of clusters from gap statistic to obtain cluster assignment for each observation
-clusters.h.2 = cutree(clusters.h, k = 2)
-table(clusters.h.2)
 ```
+
+As per the gap statistic, the optimal number of clusters is **2 clusters**.
 
 ### Step 2: Interpret the clusters
 
 Describe the clusters in terms of both their input features and the incidence of mortality within the cluster.
 
 ```{r}
+#Characterizing the clusters
+clusters.c = hcut(covid.data, k = 2, hc_func = "hclust", hc_method = "complete", hc_metric = "euclidian")
 
+clusters.c$size
+fviz_dend(clusters.c, rect = TRUE)
+fviz_cluster(clusters.c)
+
+input.feature.vals = cbind(covid.data, cluster = clusters.c$cluster)
+input.feature.vals %>%
+ group_by(cluster) %>%
+ summarise_all(mean) %>% 
+  knitr::kable()
 ```
 
 Question 3: A researcher at a different medical institution has heard about your analysis and is interested in using your results to determine risk of mortality within their ICU. What are some limitations or concerns of using the results from your unsupervised analysis in a different setting?
 
+- different tools to measure
+- different populations => ICU is potentially very different in terms of patient composition
+- unsupervised 
 
 
 
