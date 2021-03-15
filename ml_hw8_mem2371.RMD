@@ -1,8 +1,8 @@
 ---
 title: 'Exercise & Assignment: Dealing with High Dimensional Data'
-author: "JAS"
-date: " "
-output: html_document
+author: "Megan Marziali"
+date: "Mar 14, 2021"
+output: word_document
 ---
 
 ```{r setup, include=FALSE}
@@ -66,17 +66,13 @@ ow_obesity: overweight or obesity during childhood
 ###Before Data Analysis
 Question 1: What additional information, if any, would you want from the principal study investigators in regards to the above features? 
 
-We would want to obtain domain knowledge from the principal study investigators. They may have come across abnormalities within the data, or ways in which the study was carried out, that they would flag to other investigators. For example, they may be aware of ways in which the questions were posed which could bias the way the respondents answered and would want to flag those questions to respondents. As smoking during pregnancy is highly stigmatized, we would want to obtain information regarding how the question was asked in order to be able to gauge whether misclassification is of concern. They additionally may be able to advise regarding appropriate categorization or recoding of variables, as they have done in prior studies or have seen done in the literature.
-
-Where/when the data was collected, context, identifying confounders/modifiers
+We would want to obtain domain knowledge from the principal study investigators. This includes when and where the data was collected, to get a better understanding of the study context. They may have come across abnormalities within the data, or ways in which the study was carried out, that they would flag to other investigators. For example, they may be aware of ways in which the questions were posed which could bias the way the respondents answered and would want to flag those questions to respondents. As smoking during pregnancy is highly stigmatized, we would want to obtain information regarding how the question was asked in order to be able to gauge whether misclassification is of concern. They additionally may be able to advise regarding appropriate categorization or recoding of variables, as they have done in prior studies or have seen done in the literature. They may have also considered possible confounders and modifiers that they would want to flag for other investigators.
 
 In relation to other features in the dataset, we would need to know clinically relevant values, which the investigators could provide.
 
 Question 2: Look at the features in the dataset before you start your analysis. Are there any you want to exclude from your analysis completely? Why or why not? Are there any you want to recode or transform? Why or why not?
 
-To be able to answer whether we would want to recode some variables, we might want to begin data exploration and determine whether small cell sizes are of concern. We would likely want to recode the chemical concentration variables as greater than or equal to a concentration of clinical significance. 
-
-We could also consider removing variables that we hypothesize to be highly correlated. For example, including both birth weight and birth length may be redundant, as they are likely to be correlated. If I had access to appropriate resources, I would want to recode all the concentration variables to be greater than or below clinically significant levels, as this would be more interpretable. We would also want to exclude variables that have a lot of missing data.
+To be able to answer whether we would want to recode some variables, we might want to begin data exploration and determine whether small cell sizes are of concern. Once we have a better understanding of this, we could then recode variables appropriately and potentially collapse categories. We would also want to exclude variables that have a lot of missing data, which would need to be assessed. We could also consider removing variables that we hypothesize to be highly correlated. We would likely want to recode the chemical concentration variables as greater than or equal to a concentration of clinical significance; if I had access to appropriate resources, I would want to recode all the concentration variables to be greater than or below clinically significant levels, as this would be more interpretable. 
 
 Question 3: Are any of the features not of interest as modifiable contributors to childhood overweight/obesity themselves, but in an explanatory model, you would typically include them? Will you include them in your analysis?
 
@@ -85,12 +81,12 @@ Of the features included, there are non-modifiable contributors listed. **Gestat
 ### Step 1: Load Packages and Prepare Data
 You will start by loading the needed packages. Some are already listed, but you can choose to use different ones. You will need to clean the data, check that values are plausible, ensure that all variables are the correct type for the algorithm and packages you want to use, etc.
 
-```{r data_prep}
+```{r data_prep, warning = FALSE, message = FALSE, results = "asis"}
 library(tidyverse)
 library(caret)
 library(glmnet)
 library(Amelia)
-library(table1)
+library(arsenal)
 
 #Importing and recoding the data to be appropriate for the variable type
 bw.data = read_csv("./data/birthcohort_data.csv") %>% 
@@ -116,14 +112,18 @@ bw.data = read_csv("./data/birthcohort_data.csv") %>%
 missmap(bw.data)
 
 #Checking reasonable values
-table1(~ .| obesity, data = bw.data)
+table.1 = tableby(obesity ~ ., data = bw.data,
+        numeric.stats = c("mean","median", "range"))
+summary(table.1, text = TRUE)
 ```
+
+**NOTE**: the table is readable in R, but it won't convert properly to word.
 
 From table 1, some of the values that the cellular concentrations take on are not plausible. It is not reasonable to have a negative concentration of a metal in the blood, the plausible values range from 0 upwards. We would want to consult with the study PIs to understand how these values were collected, and whether there was a measurement error or data input error. As preterm births are generally <37 weeks, it is not plausible that the gestational length exceeds 37 weeks; however, the maximum values observed from Table 1 exceed 37 weeks. To run this analysis properly, we should likely exclude births that are not preterm.
 
 This table also allows us to understand that there are small cell sizes. Income levels 159, 204 and 205 should be collapsed and will be recoded as such. Race level 212 and 855824 should be combined or excluded from analysis. Education level 215 should be collapsed with 203.
 
-```{r}
+```{r warning = FALSE, message = FALSE, results = "asis"}
 bw.data = bw.data %>% 
   mutate(
     income = 
@@ -152,12 +152,14 @@ bw.data = bw.data %>%
              "215" = "Some high school or less")
     )
 
-table1(~ .| obesity, data = bw.data)
+table.1 = tableby(obesity ~ ., data = bw.data,
+        numeric.stats = c("mean","median", "range"))
+summary(table.1, test = TRUE)
 ```
 
 The recoded data looks better in terms of small cell sizes.
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 #Excluding variables previously hypothesized to not contribute to obesity
 bw.new = bw.data %>% 
   select(
@@ -181,7 +183,7 @@ Yes, we want to partition the data. We are using a data-driven pipeline, and by 
 
 Regardless of your answer above, partition the data into a 70/30 split just to get the practice with the programming code to partition.
 
-```{r partition}
+```{r partition, warning = FALSE, message = FALSE}
 set.seed(100)
 
 train.indices = createDataPartition(y = bw.new$obesity,p = 0.7,list = FALSE)
@@ -194,7 +196,7 @@ testing = bw.new[-train.indices,]
 
 Question 5: Which regularization algorithm seems most appropriate for this research question? Justify your choice. 
 
-I would use a LASSO algorithm. LASSO is highly interpretable, which is necessary when conducting feature selection, as we want to be able to distinguish and understand the features that have been selected; we want to be able to communicate that the selected features are probable risk factors. 
+I would use a LASSO algorithm. LASSO is highly interpretable, which is necessary when conducting feature selection, as we want to be able to distinguish and understand the features that have been selected; we want to be able to communicate that the selected features are probable risk factors. LASSO is also the algorithm most suitable for feature selection, as the impact of the penalty is to shrink to zero. 
 
 Question 6: Which metrics will you use to evaluate your model? Consider your research question and the outcome of interest. 
 
@@ -202,7 +204,7 @@ I will use accuracy as an evaluation metric to evaluate the model, using a confu
 
 Assess how the metric(s) change(s) based on values of the hyperparameters. Construct a grid to explore various values (do not just use the default parameters). Once you have a final model, determine the features that are considered "important" based on the model output.
  
-```{r}
+```{r, warning = FALSE, message = FALSE}
 set.seed(100)
 
 #Create grid to search lambda
@@ -227,8 +229,6 @@ coef(lasso.bw$finalModel, lasso.bw$bestTune$lambda)
 varImp(lasso.bw)
 
 # Make predictions
-pred.bw <- lasso.bw %>% predict(x.train)
-
 pred.bw = predict(lasso.bw, training)
 pred.bw.prob = predict(lasso.bw, training, type = "prob")
 
@@ -239,13 +239,15 @@ print(eval.results)
 #Accuracy of this model is 0.89
 ```
 
+The variable that is of the most important is the concentration of cobalt, followed by infant growth score and concentration of vanadium. Levels of income and education are both among the ten most important variables.
+
 ### Step 4: Test your final model in the testing dataset
 
 Use the implementation of your model in the testing set to obtain final performance metrics and perform the inference needed to address your research question. 
 
 Question 7: Summarize your final conclusion in 2-3 sentences
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 set.seed(100)
 
 # Using best fit model from above with testing data
@@ -257,9 +259,7 @@ eval.results = confusionMatrix(pred.lasso.f, testing$obesity, positive = "1")
 print(eval.results)
 ```
 
-The final accuracy of this model is **89.6**. 
-
-The variable that is of the most important is the concentration of cobalt, followed by infant growth score and concentration of vanadium. Income and education are both among the ten most important variables. This suggests that concentrations of some metals and sociodemographic factors are both important when considering risk factors for childhood obesity.
+The final accuracy of this model is **89.6**. The variables of importance suggest that concentrations of some metals and sociodemographic factors are both important when considering risk factors for childhood obesity. Modifiable variables, including infant growth and birth length, suggest that intervening on maternal and child nutrition are both important when ultimately considering childhood obesity.
 
 ### Step 5: Construct another model, making a different choice of variable inclusion. 
 
@@ -267,7 +267,7 @@ Redo the above, but now make the opposite choice about variable inclusion. That 
 
 Question 7: Do the "important" features change when you make a different choice about the other features? Do the hyperparameters that optimize the model change when the additional variables are included? What about model performance?
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 set.seed(100)
 
 train.indices = createDataPartition(y = bw.data$obesity,p = 0.7,list = FALSE)
@@ -358,7 +358,7 @@ Hierarchical clustering would be the most appropriate for this particular resear
 
 Implement the unsupervised analysis you chose in Question 2, implementing appropriate analyses to determine the number of phenotypic clusters to keep within the analysis.
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 library(stats)
 library(factoextra)
 library(cluster)
@@ -376,7 +376,7 @@ colMeans(covid.data, na.rm = TRUE)
 apply(covid.data, 2, sd, na.rm = TRUE)
 ```
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 set.seed(100)
 
 clusters.hcut = hcut(covid.data, k = 5, hc_func = "hclust", hc_method = "complete", hc_metric = "euclidian")
@@ -395,7 +395,7 @@ As per the gap statistic, the optimal number of clusters is **2 clusters**.
 
 Describe the clusters in terms of both their input features and the incidence of mortality within the cluster.
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 #Characterizing the clusters
 clusters.c = hcut(covid.data, k = 2, hc_func = "hclust", hc_method = "complete", hc_metric = "euclidian")
 
