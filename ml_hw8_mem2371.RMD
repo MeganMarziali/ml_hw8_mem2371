@@ -354,6 +354,8 @@ One potential concern with obtaining clean data is that we would be trusting who
 
 Question 2: What unsupervised analysis do you think is appropriate for this research question? Justify your answer.
 
+Hierarchical clustering would be the most appropriate for this particular research question, as we are trying to identify clusters. Other unsupervised methods, such as PCA, are inappropriate as we are not focused on dimension reduction.
+
 Implement the unsupervised analysis you chose in Question 2, implementing appropriate analyses to determine the number of phenotypic clusters to keep within the analysis.
 
 ```{r}
@@ -366,8 +368,10 @@ library(cluster)
 covid.data = read_csv("./data/covid.csv") %>% 
   janitor::clean_names()
 
+#Checking whether there is missingness
 missmap(covid.data)
 
+#Making sure data is actually scaled
 colMeans(covid.data, na.rm = TRUE)
 apply(covid.data, 2, sd, na.rm = TRUE)
 ```
@@ -406,14 +410,8 @@ input.feature.vals %>%
   knitr::kable()
 ```
 
+There is a higher incidence of mortality within the first cluster. Within this first cluster, APACHE II scores are higher on average (which is in line with what the scale assesses, so this finding in conjunction with higher mortality is reasonable). D-dimer levels, C-reactive protein levels, creatinine levels, white blood cell levels, diastolic blood pressure levels, immunoglobulin A levels, and age are all greater in the first cluster in comparison to the second cluster. In the second cluster, SOFA score, serum lactate levels, ferritin, procalcitonin, and oxygen saturation are all greater than in the first cluster.
+
 Question 3: A researcher at a different medical institution has heard about your analysis and is interested in using your results to determine risk of mortality within their ICU. What are some limitations or concerns of using the results from your unsupervised analysis in a different setting?
 
-- different tools to measure
-- different populations => ICU is potentially very different in terms of patient composition
-- unsupervised 
-
-
-
-
-
-
+They would need to consider some serious concerns and limitations. Firstly, the measurement tools used to collect this data may differ from their own measurement tools, and this could cause discrepancies. Additionally, they would need to consider differing patient compositions; seeing as this analysis was done with COVID patients, they would need to think about whether this is an appropriately similar patient pool to their own ICU. As this is a purely data-driven technique, the researchers need to consider the same data preparation steps that I've taken but apply it to their own data in a logical way.
